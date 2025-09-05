@@ -69,10 +69,6 @@ build/
 ehthumbs.db
 Thumbs.db
 
-# Test files (your JSONL files)
-*.jsonl
-*.md
-
 # Temporary files
 *.tmp
 *.temp
