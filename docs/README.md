@@ -1,6 +1,23 @@
 # JsonlToMD
 
-A cross-platform tool for converting Codex session JSONL files to readable Markdown format.
+A cross-platform tool for converting Codex session JSONL files to readable Markdown format. 
+
+## Why JsonlToMD?
+
+The Codex extension and Codex CLI don't have a way to export chat history. 
+
+Codex Tasks/Chats are logged as .jsonl files with names starting with rollout, located in the .codex folder in the user's home folder.
+
+- For Mac, that's ~/.codex/sessions/year/month/day/
+- For Windows, that's C:/users/username/.codex/sessions/year/month/day/
+
+The files have names in the format:
+
+- rollout-year-month-dateThour-minute-second-GUID.jsonl
+
+Example:
+
+- rollout-2025-09-05T16-15-09-0c5ea123-4bc5-6def-78aa-90b123456c78.jsonl
 
 ## Overview
 
@@ -208,6 +225,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Inspired by the need to export Codex session history
 
 ## Changelog
+
+### v1.1 (2025-09-05)
+- Fixed wildcard support to work correctly for Windows users
+- Improved file path handling across all platforms
+- Enhanced error messages for better user experience
 
 ### v1.0 (2025-09-05)
 - Initial release

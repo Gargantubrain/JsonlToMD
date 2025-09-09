@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -19,6 +20,42 @@ class Program
     static bool ShowUI = false;
     static string OutputFolder = "";
     static List<string> InputFiles = new List<string>();
+
+    static List<string> ExpandWildcards(string pattern)
+    {
+        var expandedFiles = new List<string>();
+        
+        try
+        {
+            // Check if the pattern contains wildcards
+            if (pattern.Contains('*') || pattern.Contains('?'))
+            {
+                string directory = Path.GetDirectoryName(pattern);
+                string fileName = Path.GetFileName(pattern);
+                
+                // If no directory specified, use current directory
+                if (string.IsNullOrEmpty(directory))
+                {
+                    directory = Environment.CurrentDirectory;
+                }
+                
+                // Get all matching files
+                var matchingFiles = Directory.GetFiles(directory, fileName, SearchOption.TopDirectoryOnly);
+                expandedFiles.AddRange(matchingFiles);
+            }
+            else
+            {
+                // No wildcards, add the file as-is
+                expandedFiles.Add(pattern);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error expanding wildcard pattern '{pattern}': {ex.Message}");
+        }
+        
+        return expandedFiles;
+    }
 
     static void Main(string[] args)
     {
@@ -89,8 +126,9 @@ class Program
                 }
                 else
                 {
-                    // Handle input files
-                    InputFiles.Add(arg);
+                    // Handle input files - expand wildcards if present
+                    var expandedFiles = ExpandWildcards(arg);
+                    InputFiles.AddRange(expandedFiles);
                 }
             }
         }
@@ -150,9 +188,10 @@ class Program
 
     static void ShowUsage()
     {
-        Console.WriteLine("JsonlToMD v1.0 build 2025-09-05 - https://github.com/Gargantubrain/JsonlToMD");
-        Console.WriteLine("\nUsage: jsonl-to-md.exe <file1.jsonl> [file2.jsonl ...] [options]");
-        Console.WriteLine("       jsonl-to-md.exe -ui (interactive mode)");
+        Console.WriteLine("JsonlToMD v1.1 build 2025-09-09 - https://github.com/Gargantubrain/JsonlToMD");
+        Console.WriteLine("\nUsage: JsonlToMD <file1.jsonl> [file2.jsonl ...] [options]");
+        Console.WriteLine("       JsonlToMD -ui (interactive mode)");
+        Console.WriteLine("\nNote: Wildcards (*.jsonl, session*.jsonl) are supported on all platforms");
         Console.WriteLine("\nOptions:");
         Console.WriteLine("  -tools      Include tool calls and outputs");
         Console.WriteLine("  -noreasoning, -noplanning, -nothinking  Exclude assistant reasoning");
@@ -165,11 +204,12 @@ class Program
         Console.WriteLine("  -ui         Show interactive UI");
         Console.WriteLine("  -h, --help, -help  Show this help message");
         Console.WriteLine("\nExamples:");
-        Console.WriteLine("  jsonl-to-md.exe session.jsonl");
-        Console.WriteLine("  jsonl-to-md.exe session1.jsonl session2.jsonl -tools");
-        Console.WriteLine("  jsonl-to-md.exe *.jsonl -o ./output -noreasoning");
-        Console.WriteLine("  jsonl-to-md.exe session.jsonl -stdout | findstr \"error\"");
-        Console.WriteLine("  jsonl-to-md.exe -ui");
+        Console.WriteLine("  JsonlToMD session.jsonl");
+        Console.WriteLine("  JsonlToMD session1.jsonl session2.jsonl -tools");
+        Console.WriteLine("  JsonlToMD *.jsonl -o ./output -noreasoning");
+        Console.WriteLine("  JsonlToMD session*.jsonl -tools");
+        Console.WriteLine("  JsonlToMD session.jsonl -stdout | findstr \"error\"");
+        Console.WriteLine("  JsonlToMD -ui");
     }
 
     static void ShowInteractiveUI()
@@ -297,7 +337,7 @@ class Program
             // Button behavior
             btnHelp.Clicked += () =>
             {
-                MessageBox.Query("Help", "Command-line has many options including batch mode. Use JsonlToMD.exe --help to see usage.\nUse [...] to Select a JSONL file and choose the Conversion Options. Use [Convert] to save as a .md file.", "OK");
+                MessageBox.Query("Help", "Command-line has many options including batch mode. Use JsonlToMD --help to see usage.\nUse [...] to Select a JSONL file and choose the Conversion Options. Use [Convert] to save as a .md file.", "OK");
             };
 
             btnCancel.Clicked += () =>
