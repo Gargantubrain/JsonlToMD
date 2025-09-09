@@ -219,7 +219,7 @@ class Program
         {
             var top = Application.Top;
 
-            var win = new Window("JsonToMD v1.0 - Interactive UI")
+            var win = new Window("JsonToMD v1.1 - Interactive UI")
             {
                 X = 0,
                 Y = 1, // Leave space for the top menu if any
@@ -315,7 +315,7 @@ class Program
                 X = 3,
                 Y = Pos.Bottom(cbIncludeEmoji) + 2
             };
-            var btnCancel = new Button("Close/Cancel")
+            var btnCancel = new Button("E_xit/Cancel")
             {
                 X = Pos.Right(btnConvert) + 2,
                 Y = btnConvert.Y
@@ -459,7 +459,7 @@ class Program
     {
         Console.Clear();
         Console.WriteLine("╔══════════════════════════════════════════════════════════════╗");
-        Console.WriteLine("║                    JsonToMD v1.0 - Interactive UI            ║");
+        Console.WriteLine("║                    JsonToMD v1.1 - Interactive UI            ║");
         Console.WriteLine("║              https://github.com/Gargantubrain/JsonlToMD     ║");
         Console.WriteLine("╚══════════════════════════════════════════════════════════════╝");
         Console.WriteLine();
