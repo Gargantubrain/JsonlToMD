@@ -21,6 +21,18 @@ class Program
     static string OutputFolder = "";
     static List<string> InputFiles = new List<string>();
 
+    static bool IsGeminiFormat(string filePath)
+    {
+        string extension = Path.GetExtension(filePath).ToLower();
+        return extension == ".json";
+    }
+
+    static bool IsJsonlFormat(string filePath)
+    {
+        string extension = Path.GetExtension(filePath).ToLower();
+        return extension == ".jsonl";
+    }
+
     static List<string> ExpandWildcards(string pattern)
     {
         var expandedFiles = new List<string>();
@@ -188,10 +200,11 @@ class Program
 
     static void ShowUsage()
     {
-        Console.WriteLine("JsonlToMD v1.1 build 2025-09-09 - https://github.com/Gargantubrain/JsonlToMD");
-        Console.WriteLine("\nUsage: JsonlToMD <file1.jsonl> [file2.jsonl ...] [options]");
+        Console.WriteLine("JsonlToMD v1.2 build 2025-09-14 - https://github.com/Gargantubrain/JsonlToMD");
+        Console.WriteLine("\nUsage: JsonlToMD <file1.jsonl|file1.json> [file2.jsonl|file2.json ...] [options]");
         Console.WriteLine("       JsonlToMD -ui (interactive mode)");
-        Console.WriteLine("\nNote: Wildcards (*.jsonl, session*.jsonl) are supported on all platforms");
+        Console.WriteLine("\nNote: Supports both Codex (.jsonl) and Gemini-CLI (.json) formats");
+        Console.WriteLine("      Wildcards (*.jsonl, *.json, session*.*) are supported on all platforms");
         Console.WriteLine("\nOptions:");
         Console.WriteLine("  -tools      Include tool calls and outputs");
         Console.WriteLine("  -noreasoning, -noplanning, -nothinking  Exclude assistant reasoning");
@@ -204,10 +217,11 @@ class Program
         Console.WriteLine("  -ui         Show interactive UI");
         Console.WriteLine("  -h, --help, -help  Show this help message");
         Console.WriteLine("\nExamples:");
-        Console.WriteLine("  JsonlToMD session.jsonl");
-        Console.WriteLine("  JsonlToMD session1.jsonl session2.jsonl -tools");
-        Console.WriteLine("  JsonlToMD *.jsonl -o ./output -noreasoning");
-        Console.WriteLine("  JsonlToMD session*.jsonl -tools");
+        Console.WriteLine("  JsonlToMD session.jsonl                        # Codex files");
+        Console.WriteLine("  JsonlToMD session.json                         # Gemini-CLI files");
+        Console.WriteLine("  JsonlToMD session1.jsonl session2.json -tools  # Mixed files, include tool calls");
+        Console.WriteLine("  JsonlToMD *.jsonl *.json -o ./output           # All files with wildcards");
+        Console.WriteLine("  JsonlToMD session*.* -tools                    # Mixed wildcards, include tool calls");
         Console.WriteLine("  JsonlToMD session.jsonl -stdout | findstr \"error\"");
         Console.WriteLine("  JsonlToMD -ui");
     }
@@ -219,7 +233,7 @@ class Program
         {
             var top = Application.Top;
 
-            var win = new Window("JsonToMD v1.1 - Interactive UI")
+            var win = new Window("JsonToMD v1.2 - Interactive UI")
             {
                 X = 0,
                 Y = 1, // Leave space for the top menu if any
@@ -228,8 +242,8 @@ class Program
             };
             top.Add(win);
 
-            // JSONL file selector
-            var fileLabel = new Label("JSONL File:") { X = 1, Y = 1 };
+            // Chat file selector
+            var fileLabel = new Label("Chat File:") { X = 1, Y = 1 };
             var filePathField = new TextField("")
             {
                 X = Pos.Right(fileLabel) + 1,
@@ -243,7 +257,7 @@ class Program
             };
             browseBtn.Clicked += () =>
             {
-                var od = new OpenDialog("Open JSONL", "Select a JSONL file")
+                var od = new OpenDialog("Open Chat File", "Select a JSONL or JSON file")
                 {
                     AllowsMultipleSelection = false,
                     CanChooseDirectories = false
@@ -337,7 +351,7 @@ class Program
             // Button behavior
             btnHelp.Clicked += () =>
             {
-                MessageBox.Query("Help", "Command-line has many options including batch mode. Use JsonlToMD --help to see usage.\nUse [...] to Select a JSONL file and choose the Conversion Options. Use [Convert] to save as a .md file.", "OK");
+                MessageBox.Query("Help", "Command-line has many options including batch mode. Use JsonlToMD --help to see usage.\nUse [...] to Select a chat file (.jsonl or .json) and choose the Conversion Options. Use [Convert] to save as a .md file.", "OK");
             };
 
             btnCancel.Clicked += () =>
@@ -350,12 +364,17 @@ class Program
                 string inputPath = filePathField.Text?.ToString() ?? string.Empty;
                 if (string.IsNullOrWhiteSpace(inputPath))
                 {
-                    MessageBox.ErrorQuery("Validation", "Please select a JSONL file.", "OK");
+                    MessageBox.ErrorQuery("Validation", "Please select a chat file (.jsonl or .json).", "OK");
                     return;
                 }
                 if (!File.Exists(inputPath))
                 {
                     MessageBox.ErrorQuery("File Not Found", $"{inputPath}", "OK");
+                    return;
+                }
+                if (!IsGeminiFormat(inputPath) && !IsJsonlFormat(inputPath))
+                {
+                    MessageBox.ErrorQuery("Invalid Format", "Please select a .jsonl or .json file.", "OK");
                     return;
                 }
 
@@ -451,7 +470,21 @@ class Program
         using var reader = new StreamReader(inputPath, Encoding.UTF8);
         var sb = new StringBuilder();
         using var writer = new StringWriter(sb);
-        ProcessJsonlFile(reader, writer, Path.GetFileName(inputPath));
+        
+        // Route to appropriate parser based on file format
+        if (IsGeminiFormat(inputPath))
+        {
+            ProcessGeminiFile(reader, writer, Path.GetFileName(inputPath));
+        }
+        else if (IsJsonlFormat(inputPath))
+        {
+            ProcessJsonlFile(reader, writer, Path.GetFileName(inputPath));
+        }
+        else
+        {
+            return $"❌ Unsupported file format: {Path.GetFileName(inputPath)}";
+        }
+        
         return sb.ToString();
     }
 
@@ -459,7 +492,7 @@ class Program
     {
         Console.Clear();
         Console.WriteLine("╔══════════════════════════════════════════════════════════════╗");
-        Console.WriteLine("║                    JsonToMD v1.1 - Interactive UI            ║");
+        Console.WriteLine("║                    JsonToMD v1.2 - Interactive UI            ║");
         Console.WriteLine("║              https://github.com/Gargantubrain/JsonlToMD     ║");
         Console.WriteLine("╚══════════════════════════════════════════════════════════════╝");
         Console.WriteLine();
@@ -468,7 +501,7 @@ class Program
         string inputPath = "";
         while (string.IsNullOrWhiteSpace(inputPath))
         {
-            Console.Write("📁 JSONL File Path: ");
+            Console.Write("📁 Chat File Path (.jsonl or .json): ");
             inputPath = Console.ReadLine()?.Trim() ?? "";
             
             if (string.IsNullOrWhiteSpace(inputPath))
@@ -480,6 +513,13 @@ class Program
             if (!File.Exists(inputPath))
             {
                 Console.WriteLine($"❌ File not found: {inputPath}");
+                inputPath = "";
+                continue;
+            }
+            
+            if (!IsGeminiFormat(inputPath) && !IsJsonlFormat(inputPath))
+            {
+                Console.WriteLine("❌ Please select a .jsonl or .json file.");
                 inputPath = "";
             }
         }
@@ -572,7 +612,20 @@ class Program
             using var reader = new StreamReader(inputPath, Encoding.UTF8);
             using var writer = new StreamWriter(outputPath, false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-            ProcessJsonlFile(reader, writer, Path.GetFileName(inputPath));
+            // Route to appropriate parser based on file format
+            if (IsGeminiFormat(inputPath))
+            {
+                ProcessGeminiFile(reader, writer, Path.GetFileName(inputPath));
+            }
+            else if (IsJsonlFormat(inputPath))
+            {
+                ProcessJsonlFile(reader, writer, Path.GetFileName(inputPath));
+            }
+            else
+            {
+                Console.WriteLine($"❌ Unsupported file format: {Path.GetFileName(inputPath)}");
+                return;
+            }
 
             Console.WriteLine($"✅ Converted to: {outputPath}");
         }
@@ -589,7 +642,20 @@ class Program
             using var reader = new StreamReader(inputPath, Encoding.UTF8);
             using var writer = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)) { AutoFlush = true };
 
-            ProcessJsonlFile(reader, writer, Path.GetFileName(inputPath));
+            // Route to appropriate parser based on file format
+            if (IsGeminiFormat(inputPath))
+            {
+                ProcessGeminiFile(reader, writer, Path.GetFileName(inputPath));
+            }
+            else if (IsJsonlFormat(inputPath))
+            {
+                ProcessJsonlFile(reader, writer, Path.GetFileName(inputPath));
+            }
+            else
+            {
+                Console.WriteLine($"❌ Unsupported file format: {Path.GetFileName(inputPath)}");
+                return;
+            }
 
             Console.Error.WriteLine("✅ Converted and output to stdout");
         }
@@ -634,7 +700,21 @@ class Program
                 using var reader = new StreamReader(inputFile, Encoding.UTF8);
                 using var writer = new StreamWriter(outputFile, false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-                ProcessJsonlFile(reader, writer, Path.GetFileName(inputFile));
+                // Route to appropriate parser based on file format
+                if (IsGeminiFormat(inputFile))
+                {
+                    ProcessGeminiFile(reader, writer, Path.GetFileName(inputFile));
+                }
+                else if (IsJsonlFormat(inputFile))
+                {
+                    ProcessJsonlFile(reader, writer, Path.GetFileName(inputFile));
+                }
+                else
+                {
+                    Console.WriteLine($"❌ Unsupported file format: {Path.GetFileName(inputFile)}");
+                    errorCount++;
+                    continue;
+                }
 
                 Console.WriteLine($"✅ {Path.GetFileName(inputFile)} → {Path.GetFileName(outputFile)}");
                 successCount++;
@@ -648,6 +728,136 @@ class Program
 
         Console.WriteLine();
         Console.WriteLine($"📊 Summary: {successCount} successful, {errorCount} errors");
+    }
+
+    static void ProcessGeminiFile(StreamReader reader, TextWriter writer, string fileName)
+    {
+        writer.WriteLine($"# Chat Conversation: {fileName}");
+        writer.WriteLine("\n*Exported from Gemini-CLI session*\n");
+
+        try
+        {
+            var json = reader.ReadToEnd();
+            var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in root.EnumerateArray())
+                {
+                    ProcessGeminiItem(writer, item);
+                }
+            }
+        }
+        catch (JsonException ex)
+        {
+            writer.WriteLine($"❌ Error parsing Gemini JSON: {ex.Message}");
+        }
+    }
+
+    static void ProcessGeminiItem(TextWriter writer, JsonElement item)
+    {
+        if (!item.TryGetProperty("role", out var role) || 
+            !item.TryGetProperty("parts", out var parts) ||
+            parts.ValueKind != JsonValueKind.Array)
+            return;
+
+        string roleStr = role.GetString() ?? "";
+        
+        // Map Gemini roles to display roles
+        string displayRole = roleStr switch
+        {
+            "user" => "user",
+            "model" => "assistant",
+            _ => roleStr
+        };
+
+        // Check if we should exclude this role
+        if ((displayRole == "user" && ExcludeUser) || 
+            (displayRole == "assistant" && ExcludeAssistant))
+            return;
+
+        foreach (var part in parts.EnumerateArray())
+        {
+            ProcessGeminiPart(writer, part, displayRole);
+        }
+    }
+
+    static void ProcessGeminiPart(TextWriter writer, JsonElement part, string role)
+    {
+        // Process text content
+        if (part.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String)
+        {
+            string textContent = text.GetString() ?? "";
+            if (!string.IsNullOrWhiteSpace(textContent) && !textContent.StartsWith("<environment_context>"))
+            {
+                string roleDisplay = NoEmoji ? 
+                    (role == "user" ? "User" : "Assistant") :
+                    (role == "user" ? "👤 User" : "🤖 Assistant");
+                writer.WriteLine($"## {roleDisplay}\n\n{textContent}\n\n---\n");
+            }
+        }
+        // Process function calls
+        else if ((IncludeTools || IncludeAll) && part.TryGetProperty("functionCall", out var functionCall))
+        {
+            ProcessGeminiFunctionCall(writer, functionCall);
+        }
+        // Process function responses
+        else if ((IncludeTools || IncludeAll) && part.TryGetProperty("functionResponse", out var functionResponse))
+        {
+            ProcessGeminiFunctionResponse(writer, functionResponse);
+        }
+        // Process reasoning (thoughtSignature)
+        else if ((IncludeReasoning || IncludeAll) && part.TryGetProperty("thoughtSignature", out var thoughtSignature))
+        {
+            ProcessGeminiReasoning(writer, thoughtSignature);
+        }
+    }
+
+    static void ProcessGeminiFunctionCall(TextWriter writer, JsonElement functionCall)
+    {
+        if (functionCall.TryGetProperty("name", out var name) && 
+            functionCall.TryGetProperty("args", out var args))
+        {
+            string toolName = name.GetString() ?? "unknown";
+            string arguments = args.GetRawText();
+            
+            string toolCallHeader = NoEmoji ? 
+                $"### Tool Call: {toolName}\n" :
+                $"### 🔧 Tool Call: {toolName}\n";
+            writer.WriteLine(toolCallHeader);
+            writer.WriteLine($"**Arguments:**\n```json\n{arguments}\n```\n");
+        }
+        writer.WriteLine("---\n");
+    }
+
+    static void ProcessGeminiFunctionResponse(TextWriter writer, JsonElement functionResponse)
+    {
+        if (functionResponse.TryGetProperty("response", out var response) &&
+            response.TryGetProperty("output", out var output))
+        {
+            string outputText = output.GetString() ?? "";
+            string toolOutputHeader = NoEmoji ? 
+                "### Tool Output\n" :
+                "### 📤 Tool Output\n";
+            writer.WriteLine(toolOutputHeader);
+            writer.WriteLine($"**Result:**\n```\n{outputText}\n```\n");
+        }
+        writer.WriteLine("---\n");
+    }
+
+    static void ProcessGeminiReasoning(TextWriter writer, JsonElement thoughtSignature)
+    {
+        string reasoningText = thoughtSignature.GetString() ?? "";
+        if (!string.IsNullOrWhiteSpace(reasoningText))
+        {
+            string reasoningHeader = NoEmoji ? 
+                "### Assistant Reasoning\n" :
+                "### 🧠 Assistant Reasoning\n";
+            writer.WriteLine(reasoningHeader);
+            writer.WriteLine(reasoningText);
+            writer.WriteLine("\n---\n");
+        }
     }
 
     static void ProcessJsonlFile(StreamReader reader, TextWriter writer, string fileName)

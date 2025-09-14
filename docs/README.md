@@ -1,11 +1,12 @@
 # JsonlToMD
 
-A cross-platform tool for converting Codex session JSONL files to readable Markdown format. 
+A cross-platform tool for converting Codex session JSONL files and Gemini CLI json files to Markdown format. 
 
 ## Why JsonlToMD?
 
-The Codex extension and Codex CLI don't have a way to export chat history. 
+The Codex extension, Codex CLI, and Gemini CLI don't have a way to export chat history. Even at such time as they choose to include an export function, I suspect it won't have the same features as this utility offers, such as the ability to include or exclude tool calls, reasoning, user prompts, agent responses, stdout for pipe functionaliry, etc.
 
+### Codex jsonl file locations:
 Codex Tasks/Chats are logged as .jsonl files with names starting with rollout, located in the .codex folder in the user's home folder.
 
 - For Mac, that's ~/.codex/sessions/year/month/day/
@@ -19,9 +20,31 @@ Example:
 
 - rollout-2025-09-05T16-15-09-0c5ea123-4bc5-6def-78aa-90b123456c78.jsonl
 
+### Gemini CLI json file locations:
+<u>**Important!** Gemini CLI does **not** save chats automatically!</u> 
+
+Gemini CLI provides a /chat save <your_tag_name> command, which creates a snapshot of the current chat's history. If you do not create a snapshot, your chat session will not be saved. Please remember to use the /chat save command to create the json file!
+
+**Example:** Creates a snapshot of the current chat session named "checkpoint-v1.2-add-Gemini-CLI-json-format.json"
+
+```
+/chat save v1.2-add-Gemini-CLI-json-format
+```
+
+Saved Chats become .json files with names starting with checkpoint, located in the .gemini folder in the user's home folder.
+
+- For Mac, that's ~/.gemini/tmp/<project_hash>/
+- For Windows, that's C:\users\username\\.gemini\tmp\\<project_hash>
+  - %userprofile%\\.gemini\tmp\\<project_hash>
+
+
+The files have names in the format:
+
+- checkpoint-tag.json
+
 ## Overview
 
-JsonlToMD extracts chat conversations, tool calls, and reasoning from Codex session files and converts them to clean, readable Markdown. It supports both command-line and interactive GUI modes.
+JsonlToMD extracts chat conversations, tool calls, and reasoning from Codex and Gemini CLI session files and converts them to clean, readable Markdown. It supports both command-line and interactive GUI modes.
 
 ## Features
 
@@ -61,7 +84,7 @@ JsonlToMD.exe -ui
 ```
 
 The GUI provides:
-- File browser for selecting JSONL files
+- File browser for selecting JSONL/JSON files
 - Checkboxes for conversion options
 - Save dialog for output location
 - Real-time status updates
@@ -97,22 +120,22 @@ JsonlToMD.exe *.jsonl -o ./converted
 #### Examples
 ```bash
 # Basic conversion
-JsonlToMD.exe session.jsonl
+JsonlToMD session.jsonl
 
 # Include tools and reasoning
-JsonlToMD.exe session.jsonl -tools -reasoning
+JsonlToMD session.jsonl -tools -reasoning
 
 # Assistant-only view with tools
-JsonlToMD.exe session.jsonl -nouser -tools
+JsonlToMD session.jsonl -nouser -tools
 
 # Bulk convert to specific folder
-JsonlToMD.exe *.jsonl -o ./output -noreasoning
+JsonlToMD *.jsonl -o ./output -noreasoning
 
 # Pipe to other tools
-JsonlToMD.exe session.jsonl -stdout | findstr "error"
+JsonlToMD session.jsonl -stdout | findstr "error"
 
 # Clean output without emojis
-JsonlToMD.exe session.jsonl -noemoji -tools
+JsonlToMD session.jsonl -noemoji -tools
 ```
 
 ## Output Format
@@ -144,6 +167,7 @@ Assistant response here
 ### 📤 Tool Output
 
 **Result:**
+
 ```
 total 8
 drwxr-xr-x  2 user user 4096 Jan 1 12:00 .
@@ -195,9 +219,9 @@ dotnet restore
 dotnet build
 
 # Publish for all platforms
-dotnet publish -c Release -r win-x64 --self-contained false
-dotnet publish -c Release -r osx-x64 --self-contained false
-dotnet publish -c Release -r linux-x64 --self-contained false
+dotnet publish -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+dotnet publish -c Release -r osx-x64 --self-contained false -p:PublishSingleFile=true
+dotnet publish -c Release -r linux-x64 --self-contained false -p:PublishSingleFile=true
 ```
 
 ### Project Structure
@@ -226,7 +250,18 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
-### v1.1 (2025-09-05)
+### v1.2 (2025-09-14)
+- **NEW**: Added Gemini-CLI JSON format support alongside existing Codex JSONL format
+- **NEW**: Seamless format detection - automatically processes both .json and .jsonl files
+- **NEW**: Mixed format wildcard support - process both formats in single command
+- **NEW**: Complete feature parity between Codex and Gemini-CLI formats
+- **IMPROVED**: Updated UI to accept both file formats with validation
+- **IMPROVED**: Enhanced help text with examples for both formats
+- **IMPROVED**: Better error handling for unsupported file formats
+- **FIXED**: Role mapping for Gemini format (model → assistant)
+- **FIXED**: Tool calls and reasoning processing for Gemini format
+
+### v1.1 (2025-09-09)
 - Fixed wildcard support to work correctly for Windows users
 - Improved file path handling across all platforms
 - Enhanced error messages for better user experience
