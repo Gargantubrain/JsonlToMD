@@ -865,6 +865,8 @@ class Program
         writer.WriteLine($"# Chat Conversation: {fileName}");
         writer.WriteLine("\n*Exported from Codex session*\n");
 
+        var emittedReasoning = new HashSet<string>(StringComparer.Ordinal);
+
         string line;
         while ((line = reader.ReadLine()) != null)
         {
@@ -875,42 +877,47 @@ class Program
                 var doc = JsonDocument.Parse(line);
                 var root = doc.RootElement;
 
-                if (root.TryGetProperty("type", out var type))
+                if (!root.TryGetProperty("type", out var type))
                 {
-                    string typeStr = type.GetString();
-                    
-                    // Process chat messages
-                    if (typeStr == "message" && 
-                        root.TryGetProperty("role", out var role) &&
-                        role.GetString() is string roleStr &&
-                        (roleStr == "user" || roleStr == "assistant") &&
-                        root.TryGetProperty("content", out var content))
-                    {
-                        // Check if we should exclude this role
-                        if ((roleStr == "user" && ExcludeUser) || 
-                            (roleStr == "assistant" && ExcludeAssistant))
-                            continue;
+                    continue;
+                }
 
-                        string text = ExtractText(content);
-                        if (!string.IsNullOrWhiteSpace(text) && !text.StartsWith("<environment_context>"))
+                string typeStr = type.GetString() ?? string.Empty;
+
+                switch (typeStr)
+                {
+                    case "message":
+                        if (root.TryGetProperty("role", out var roleElement) &&
+                            roleElement.GetString() is string legacyRole &&
+                            root.TryGetProperty("content", out var legacyContent))
                         {
-                            string roleDisplay = NoEmoji ? 
-                                (roleStr == "user" ? "User" : "Assistant") :
-                                (roleStr == "user" ? "👤 User" : "🤖 Assistant");
-                            writer.WriteLine($"## {roleDisplay}\n\n{text}\n\n---\n");
+                            string text = ExtractText(legacyContent);
+                            WriteMessage(writer, legacyRole, text);
                         }
-                    }
-                    // Process tool calls and outputs
-                    else if ((IncludeTools || IncludeAll) && 
-                             (typeStr == "function_call" || typeStr == "function_call_output"))
-                    {
-                        ProcessToolCall(writer, root, typeStr);
-                    }
-                    // Process reasoning
-                    else if ((IncludeReasoning || IncludeAll) && typeStr == "reasoning")
-                    {
-                        ProcessReasoning(writer, root);
-                    }
+                        break;
+
+                    case "function_call":
+                    case "function_call_output":
+                        if (IncludeTools || IncludeAll)
+                        {
+                            ProcessToolCall(writer, root, typeStr);
+                        }
+                        break;
+
+                    case "reasoning":
+                        if (IncludeReasoning || IncludeAll)
+                        {
+                            ProcessReasoning(writer, root, emittedReasoning);
+                        }
+                        break;
+
+                    case "response_item":
+                        ProcessResponseItem(root, writer, emittedReasoning);
+                        break;
+
+                    case "event_msg":
+                        ProcessEventMessage(root, writer, emittedReasoning);
+                        break;
                 }
             }
             catch (JsonException)
@@ -918,6 +925,128 @@ class Program
                 // Skip invalid JSON lines
                 continue;
             }
+        }
+    }
+
+    static void WriteMessage(TextWriter writer, string role, string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        string trimmedText = text.Trim('\r', '\n');
+        if (string.IsNullOrWhiteSpace(trimmedText))
+        {
+            return;
+        }
+
+        string normalizedRole = (role ?? string.Empty).Trim().ToLowerInvariant();
+        if (normalizedRole == "user" && ExcludeUser) return;
+        if (normalizedRole == "assistant" && ExcludeAssistant) return;
+
+        string comparisonText = trimmedText.TrimStart();
+        if (comparisonText.StartsWith("<environment_context>", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        string roleDisplay;
+        if (normalizedRole == "user")
+        {
+            roleDisplay = NoEmoji ? "User" : "👤 User";
+        }
+        else if (normalizedRole == "assistant")
+        {
+            roleDisplay = NoEmoji ? "Assistant" : "🤖 Assistant";
+        }
+        else if (normalizedRole == "system")
+        {
+            roleDisplay = NoEmoji ? "System" : "⚙️ System";
+        }
+        else if (normalizedRole == "tool")
+        {
+            roleDisplay = NoEmoji ? "Tool" : "🛠️ Tool";
+        }
+        else
+        {
+            string fallback = string.IsNullOrWhiteSpace(role) ? "Message" : char.ToUpper(role[0]) + role.Substring(1);
+            roleDisplay = NoEmoji ? fallback : $"💬 {fallback}";
+        }
+
+        writer.WriteLine($"## {roleDisplay}\n");
+        writer.WriteLine($"{trimmedText}\n\n---\n");
+    }
+
+    static void ProcessResponseItem(JsonElement root, TextWriter writer, HashSet<string> emittedReasoning)
+    {
+        if (!root.TryGetProperty("payload", out var payload) || payload.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        if (!payload.TryGetProperty("type", out var payloadTypeElement) || payloadTypeElement.ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        string payloadType = payloadTypeElement.GetString() ?? string.Empty;
+
+        switch (payloadType)
+        {
+            case "message":
+                if (payload.TryGetProperty("role", out var roleElement) && roleElement.ValueKind == JsonValueKind.String)
+                {
+                    string role = roleElement.GetString() ?? string.Empty;
+                    string messageText = string.Empty;
+
+                    if (payload.TryGetProperty("content", out var contentElement))
+                    {
+                        messageText = ExtractText(contentElement);
+                    }
+                    else if (payload.TryGetProperty("message", out var messageElement) && messageElement.ValueKind == JsonValueKind.String)
+                    {
+                        messageText = messageElement.GetString() ?? string.Empty;
+                    }
+
+                    WriteMessage(writer, role, messageText);
+                }
+                break;
+
+            case "reasoning":
+                if (IncludeReasoning || IncludeAll)
+                {
+                    ProcessReasoning(writer, payload, emittedReasoning);
+                }
+                break;
+
+            case "function_call":
+            case "function_call_output":
+                if (IncludeTools || IncludeAll)
+                {
+                    ProcessToolCall(writer, payload, payloadType);
+                }
+                break;
+        }
+    }
+
+    static void ProcessEventMessage(JsonElement root, TextWriter writer, HashSet<string> emittedReasoning)
+    {
+        if (!root.TryGetProperty("payload", out var payload) || payload.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        if (!payload.TryGetProperty("type", out var payloadTypeElement) || payloadTypeElement.ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        string payloadType = payloadTypeElement.GetString() ?? string.Empty;
+
+        if ((IncludeReasoning || IncludeAll) && payloadType == "agent_reasoning")
+        {
+            ProcessReasoning(writer, payload, emittedReasoning);
         }
     }
 
@@ -954,8 +1083,10 @@ class Program
         writer.WriteLine("---\n");
     }
 
-    static void ProcessReasoning(TextWriter writer, JsonElement root)
+    static void ProcessReasoning(TextWriter writer, JsonElement root, HashSet<string> emittedReasoning)
     {
+        string reasoningBody = string.Empty;
+
         if (root.TryGetProperty("summary", out var summary) && 
             summary.ValueKind == JsonValueKind.Array)
         {
@@ -977,14 +1108,30 @@ class Program
             // Only write the reasoning section if there's actual content
             if (reasoningText.Length > 0)
             {
-                string reasoningHeader = NoEmoji ? 
-                    "### Assistant Reasoning\n" :
-                    "### 🧠 Assistant Reasoning\n";
-                writer.WriteLine(reasoningHeader);
-                writer.WriteLine(reasoningText.ToString().Trim());
-                writer.WriteLine("\n---\n");
+                reasoningBody = reasoningText.ToString().Trim();
             }
         }
+        else if (root.TryGetProperty("text", out var textElement) && textElement.ValueKind == JsonValueKind.String)
+        {
+            reasoningBody = textElement.GetString() ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(reasoningBody))
+        {
+            return;
+        }
+
+        if (emittedReasoning != null && !emittedReasoning.Add(reasoningBody))
+        {
+            return;
+        }
+
+        string reasoningHeader = NoEmoji ? 
+            "### Assistant Reasoning\n" :
+            "### 🧠 Assistant Reasoning\n";
+        writer.WriteLine(reasoningHeader);
+        writer.WriteLine(reasoningBody);
+        writer.WriteLine("\n---\n");
     }
 
     static string ExtractText(JsonElement content)
